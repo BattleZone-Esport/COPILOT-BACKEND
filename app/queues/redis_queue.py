@@ -15,7 +15,7 @@ DLQ_KEY = "ureshii.jobs.dead"
 _redis_client: Optional[Redis] = None
 
 
-def def get_redis_client() -> Redis:
+def get_redis_client() -> Redis:
     """Initializes and returns a singleton Redis client instance."""
     global _redis_client
     if _redis_client is None:

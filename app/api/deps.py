@@ -15,4 +15,4 @@ async def validate_csrf(request: Request):
     session_csrf_token = request.session.get('csrf_token')
     request_csrf_token = request.headers.get('X-CSRF-Token')
     if not validate_csrf_token(session_csrf_token, request_csrf_token):
-        raise HTTPException(status_code=4.3, detail='CSRF token mismatch')
+        raise HTTPException(status_code=403, detail='CSRF token mismatch')
