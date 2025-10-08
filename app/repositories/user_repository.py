@@ -1,11 +1,20 @@
 from typing import Optional, Any
 from datetime import datetime, timezone
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from pymongo.errors import DuplicateKeyError
+import logging
+
+_logger = logging.getLogger(__name__)
+
 
 async def create_user(db: AsyncIOMotorDatabase, data: dict[str, Any]) -> dict:
     data["created_at"] = data.get("created_at") or datetime.now(timezone.utc)
     data["last_login"] = datetime.now(timezone.utc)
-    await db.users.insert_one(data)
+    try:
+        await db.users.insert_one(data)
+    except DuplicateKeyError:
+        _logger.warning("Duplicate user: %s", data.get("email"))
+        raise ValueError("User with this email already exists")
     return data
 
 async def get_user_by_id(db: AsyncIOMotorDatabase, user_id: str) -> Optional[dict]:

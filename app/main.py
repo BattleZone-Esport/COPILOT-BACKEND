@@ -35,10 +35,8 @@ def create_app() -> FastAPI:
     app = FastAPI(title=settings.APP_NAME, lifespan=lifespan)
 
     # Middlewares
-    if settings.AUTH_SECRET_KEY:
+    if settings.AUTH_ENABLED:
         app.add_middleware(SessionMiddleware, secret_key=settings.AUTH_SECRET_KEY)
-    else:
-        _logger.warning("AUTH_SECRET_KEY not set, session middleware not loaded")
 
     app.add_middleware(
         CORSMiddleware,

@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import List, Optional, Literal
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field, AnyUrl, field_validator
+from pydantic import Field, AnyUrl, field_validator, model_validator
 
 
 class Settings(BaseSettings):
@@ -26,56 +26,39 @@ class Settings(BaseSettings):
     MONGO_URI: Optional[str] = None  # alias accepted
     MONGODB_DB: str = "ureshii_partner"
 
-    # OpenRouter
-    OPENROUTER_API_KEY: str = Field(default="", repr=False)
-    OPENROUTER_SITE_URL: Optional[str] = None
-    OPENROUTER_SITE_NAME: Optional[str] = None
+    # OpenAI
+    OPENAI_API_KEY: Optional[str] = Field(default=None, repr=False)
+    OPENAI_ORG_ID: Optional[str] = Field(default=None, repr=False)
+    OPENAI_MODEL: str = "gpt-3.5-turbo"
 
-    # Default models
-    DEFAULT_CODER_MODEL: str = "qwen/qwen3-coder:free"
-    DEFAULT_DEBUGGER_MODEL: str = "deepseek/deepseek-chat-v3.1:free"
-    DEFAULT_FIXER_MODEL: str = "nvidia/nemotron-nano-9b-v2:free"
-    DEFAULT_CHATBOT_MODEL: str = "qwen/qwen3-30b-a3b:free"
+    # LLM
+    PROMPT_MAX_CHARS: int = 2000
+    ALLOWED_MODELS: List[str] = [
+        "openai/gpt-3.5-turbo",
+        "openai/gpt-4",
+        "anthropic/claude-2",
+        "google/gemini-pro",
+    ]
 
-    # Queue
-    QUEUE_BACKEND: Literal["redis", "qstash", "none"] = "redis"
-    REDIS_URL: Optional[str] = None
 
-    # QStash
-    QSTASH_URL: str = "https://qstash.upstash.io"
+    # Queues
+    QUEUE_BACKEND: Literal["redis", "gcp-pubsub", "qstash", "none"] = "none"
+    REDIS_URL: Optional[AnyUrl] = None
     QSTASH_TOKEN: Optional[str] = Field(default=None, repr=False)
-    QSTASH_CURRENT_SIGNING_KEY: Optional[str] = None
-    QSTASH_NEXT_SIGNING_KEY: Optional[str] = None
-    QSTASH_DESTINATION_URL: Optional[str] = None
-    QSTASH_VERIFY_SIGNATURE: bool = True
+    QSTASH_CALLBACK_URL: Optional[AnyUrl] = None
+    GCP_PROJECT_ID: Optional[str] = None
+    GCP_PUBSUB_TOPIC: Optional[str] = None
 
-    # New configuration
-    PROMPT_MAX_CHARS: int = 20000
+    @field_validator("APP_CORS_ORIGINS")
+    def build_cors_origins(cls, v: str) -> List[str]:
+        return [origin.strip() for origin in v.split(",")]
 
-    @property
-    def mongodb_uri_resolved(self) -> str:
-        if self.MONGODB_URI:
-            return self.MONGODB_URI
-        if self.MONGO_URI:
-            return self.MONGO_URI
-        raise ValueError("MONGODB_URI (or MONGO_URI) must be set")
+    @model_validator(mode='after')
+    def check_auth_secret_key(self) -> 'Settings':
+        if self.AUTH_ENABLED and not self.AUTH_SECRET_KEY:
+            raise ValueError("AUTH_SECRET_KEY must be set when AUTH_ENABLED is True")
+        return self
 
-    @property
-    def cors_origins(self) -> List[str]:
-        raw = (self.APP_CORS_ORIGINS or "").strip()
-        if raw == "*":
-            return ["*"]
-        return [x.strip() for x in raw.split(",") if x.strip()]
-
-    @field_validator("OPENROUTER_API_KEY")
-    @classmethod
-    def _openrouter_key_not_empty(cls, v: str) -> str:
-        if not v:
-            # Allow empty in dev, but warn at runtime if used.
-            return v
-        return v
-
-
-@lru_cache
-def get_settings() -> Settings:
+@lru_cache()
+def get_settings():
     return Settings()

@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
 from app.core.config import get_settings
-from app.db.mongo import get_db
+from app.db.mongo import get_db, get_client
 from app.repositories.job_repository import JobRepository
 from app.models.schemas import JobCreate, JobOptions, RunRecord, ArtifactRecord
 from app.services.agents.coder import CoderAgent
@@ -26,6 +26,7 @@ class Orchestrator:
             "debugger": s.DEFAULT_DEBUGGER_MODEL,
             "fixer": s.DEFAULT_FIXER_MODEL,
         }
+        self.allowed_models = s.ALLOWED_MODELS
         self.coder = CoderAgent()
         self.debugger = DebuggerAgent()
         self.fixer = FixerAgent()
@@ -74,86 +75,106 @@ class Orchestrator:
 
     async def run_ureshii_p1_pipeline(self, job_id: str, prompt: str, options: JobOptions) -> Dict[str, Any]:
         db = await get_db()
+        client = await get_client()
         repo = JobRepository(db)
 
         coder_model = options.coder_model or self.defaults["coder"]
+        if coder_model not in self.allowed_models:
+            raise ValueError(f"Model {coder_model} is not allowed")
+
         debugger_model = options.debugger_model or self.defaults["debugger"]
+        if debugger_model not in self.allowed_models:
+            raise ValueError(f"Model {debugger_model} is not allowed")
+
         fixer_model = options.fixer_model or self.defaults["fixer"]
+        if fixer_model not in self.allowed_models:
+            raise ValueError(f"Model {fixer_model} is not allowed")
 
         coder_res = None
-        try:
-            # Coder Agent
-            await repo.update_job_status(job_id, "running", intermediate_message="Generating code with Ureshii-P1...")
-            run = RunRecord(job_id=job_id, agent="coder", input=prompt, status="running", started_at=datetime.now(timezone.utc))
-            await repo.add_run(run)
-            coder_res = await self.coder.run(job_id, prompt, coder_model)
-            await repo.update_run(job_id, "coder", {
-                "output": coder_res.output,
-                "status": "succeeded",
-                "completed_at": datetime.now(timezone.utc),
-            })
-            await repo.add_artifact(ArtifactRecord(
-                job_id=job_id, agent="coder", type="code",
-                content=coder_res.artifact_content, created_at=datetime.now(timezone.utc)
-            ))
+        async with await client.start_session() as session:
+            async with session.start_transaction():
+                try:
+                    # Coder Agent
+                    await repo.update_job_status(job_id, "running", intermediate_message="Generating code with Ureshii-P1...")
+                    run = RunRecord(job_id=job_id, agent="coder", input=prompt, status="running", started_at=datetime.now(timezone.utc))
+                    await repo.add_run(run)
+                    coder_res = await self.coder.run(job_id, prompt, coder_model)
+                    await repo.update_run(job_id, "coder", {
+                        "output": coder_res.output,
+                        "status": "succeeded",
+                        "completed_at": datetime.now(timezone.utc),
+                    })
+                    await repo.add_artifact(ArtifactRecord(
+                        job_id=job_id, agent="coder", type="code",
+                        content=coder_res.artifact_content, created_at=datetime.now(timezone.utc)
+                    ))
 
-            await repo.update_job_status(job_id, "debugging", intermediate_message="Code generated, debugging in progress...", intermediate_output=coder_res.output)
+                    await repo.update_job_status(job_id, "debugging", intermediate_message="Code generated, debugging in progress...", intermediate_output=coder_res.output)
 
-            # Debugger Agent
-            debug_input = coder_res.output or ""
-            run = RunRecord(job_id=job_id, agent="debugger", input=debug_input, status="running", started_at=datetime.now(timezone.utc))
-            await repo.add_run(run)
-            dbg_res = await self.debugger.run(job_id, debug_input, debugger_model)
+                    # Debugger Agent
+                    dbg_res = None
+                    try:
+                        debug_input = coder_res.output or ""
+                        run = RunRecord(job_id=job_id, agent="debugger", input=debug_input, status="running", started_at=datetime.now(timezone.utc))
+                        await repo.add_run(run)
+                        dbg_res = await self.debugger.run(job_id, debug_input, debugger_model)
+                    except Exception as e:
+                        _logger.exception("Debugger agent failed for job %s", job_id)
 
-            if not dbg_res or not dbg_res.output:
-                _logger.warning("Debugger failed or returned no output for job %s. Falling back to coder's output.", job_id)
-                final = coder_res.output or ""
-                await repo.update_job_status(job_id, "succeeded", final_output=final)
-                return {"job_id": job_id, "status": "succeeded", "final_output": final, "message": "Debugging failed, returning initial generated code."}
+                    if not dbg_res or not dbg_res.output:
+                        _logger.warning("Debugger failed or returned no output for job %s. Falling back to coder's output.", job_id)
+                        final = coder_res.output or ""
+                        await repo.update_job_status(job_id, "succeeded", final_output=final)
+                        return {"job_id": job_id, "status": "succeeded", "final_output": final, "message": "Debugging failed, returning initial generated code."}
 
-            await repo.update_run(job_id, "debugger", {
-                "output": dbg_res.output,
-                "status": "succeeded",
-                "completed_at": datetime.now(timezone.utc),
-            })
-            await repo.add_artifact(ArtifactRecord(
-                job_id=job_id, agent="debugger", type="report",
-                content=dbg_res.artifact_content, created_at=datetime.now(timezone.utc)
-            ))
-            await repo.update_job_status(job_id, "fixing", intermediate_message=f"Debugging complete. Report: {dbg_res.output}. Fixing code...", intermediate_output=coder_res.output)
+                    await repo.update_run(job_id, "debugger", {
+                        "output": dbg_res.output,
+                        "status": "succeeded",
+                        "completed_at": datetime.now(timezone.utc),
+                    })
+                    await repo.add_artifact(ArtifactRecord(
+                        job_id=job_id, agent="debugger", type="report",
+                        content=dbg_res.artifact_content, created_at=datetime.now(timezone.utc)
+                    ))
+                    await repo.update_job_status(job_id, "fixing", intermediate_message=f"Debugging complete. Report: {dbg_res.output}. Fixing code...", intermediate_output=coder_res.output)
 
-            # Fixer Agent
-            fixer_input = f"Original code:\n{coder_res.output or ''}\n\nDebugger report:\n{dbg_res.output or ''}\n\nReturn only corrected code."
-            run = RunRecord(job_id=job_id, agent="fixer", input=fixer_input, status="running", started_at=datetime.now(timezone.utc))
-            await repo.add_run(run)
-            fixer_res = await self.fixer.run(job_id, fixer_input, fixer_model)
+                    # Fixer Agent
+                    fixer_res = None
+                    try:
+                        fixer_input = f"Original code:\n{coder_res.output or ''}\n\nDebugger report:\n{dbg_res.output or ''}\n\nReturn only corrected code."
+                        run = RunRecord(job_id=job_id, agent="fixer", input=fixer_input, status="running", started_at=datetime.now(timezone.utc))
+                        await repo.add_run(run)
+                        fixer_res = await self.fixer.run(job_id, fixer_input, fixer_model)
+                    except Exception as e:
+                        _logger.exception("Fixer agent failed for job %s", job_id)
 
-            if not fixer_res or not fixer_res.output:
-                _logger.warning("Fixer failed or returned no output for job %s. Falling back to coder's output.", job_id)
-                final = coder_res.output or ""
-                await repo.update_job_status(job_id, "succeeded", final_output=final)
-                return {"job_id": job_id, "status": "succeeded", "final_output": final, "message": "Code fixing failed, returning initial generated code."}
 
-            await repo.update_run(job_id, "fixer", {
-                "output": fixer_res.output,
-                "status": "succeeded",
-                "completed_at": datetime.now(timezone.utc),
-            })
-            await repo.add_artifact(ArtifactRecord(
-                job_id=job_id, agent="fixer", type="code",
-                content=fixer_res.artifact_content, created_at=datetime.now(timezone.utc)
-            ))
+                    if not fixer_res or not fixer_res.output:
+                        _logger.warning("Fixer failed or returned no output for job %s. Falling back to coder's output.", job_id)
+                        final = coder_res.output or ""
+                        await repo.update_job_status(job_id, "succeeded", final_output=final)
+                        return {"job_id": job_id, "status": "succeeded", "final_output": final, "message": "Code fixing failed, returning initial generated code."}
 
-            final = fixer_res.output or ""
-            await repo.update_job_status(job_id, "succeeded", final_output=final)
-            return {"job_id": job_id, "status": "succeeded", "final_output": final}
+                    await repo.update_run(job_id, "fixer", {
+                        "output": fixer_res.output,
+                        "status": "succeeded",
+                        "completed_at": datetime.now(timezone.utc),
+                    })
+                    await repo.add_artifact(ArtifactRecord(
+                        job_id=job_id, agent="fixer", type="code",
+                        content=fixer_res.artifact_content, created_at=datetime.now(timezone.utc)
+                    ))
 
-        except Exception as e:
-            _logger.exception("Pipeline failed for job %s", job_id)
-            if coder_res and coder_res.output:
-                await repo.update_job_status(job_id, "failed", error={"message": str(e)}, final_output=coder_res.output)
-                return {"job_id": job_id, "status": "failed", "error": str(e), "final_output": coder_res.output, "message": "An error occurred, returning initial generated code."}
-            else:
-                await repo.update_job_status(job_id, "failed", error={"message": str(e)})
-                return {"job_id": job_id, "status": "failed", "error": str(e)}
+                    final = fixer_res.output or ""
+                    await repo.update_job_status(job_id, "succeeded", final_output=final)
+                    return {"job_id": job_id, "status": "succeeded", "final_output": final}
 
+                except Exception as e:
+                    _logger.exception("Pipeline failed for job %s", job_id)
+                    await session.abort_transaction()
+                    if coder_res and coder_res.output:
+                        await repo.update_job_status(job_id, "failed", error={"message": str(e)}, final_output=coder_res.output)
+                        return {"job_id": job_id, "status": "failed", "error": str(e), "final_output": coder_res.output, "message": "An error occurred, returning initial generated code."}
+                    else:
+                        await repo.update_job_status(job_id, "failed", error={"message": str(e)})
+                        return {"job_id": job_id, "status": "failed", "error": str(e)}

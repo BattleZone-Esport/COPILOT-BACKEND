@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional, List
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from pymongo.errors import DuplicateKeyError
 
 from app.models.schemas import JobCreate, JobPublic, JobResult, RunRecord, ArtifactRecord
 
@@ -16,7 +17,11 @@ class JobRepository:
         self.db = db
 
     async def create_job(self, data: JobCreate) -> None:
-        await self.db.jobs.insert_one(data.model_dump())
+        try:
+            await self.db.jobs.insert_one(data.model_dump())
+        except DuplicateKeyError:
+            _logger.warning("Duplicate job_id: %s", data.job_id)
+            raise ValueError(f"Job with id {data.job_id} already exists.")
 
     async def update_job_status(self, job_id: str, status: str, error: Optional[Dict[str, Any]] = None,
                                 final_output: Optional[str] = None, intermediate_message: Optional[str] = None,

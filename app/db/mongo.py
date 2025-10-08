@@ -47,6 +47,11 @@ async def get_db() -> AsyncIOMotorDatabase:
         # or raise a more specific exception to be handled by the caller.
         raise HTTPException(status_code=500, detail="Database connection failed")
 
+async def get_client() -> AsyncIOMotorClient:
+    """Returns the database client, ensuring it is connected."""
+    await get_db()  # Ensures client is connected and _client is not None
+    return _client
+
 async def ensure_indexes() -> None:
     try:
         db = await get_db()
@@ -61,9 +66,8 @@ async def ensure_indexes() -> None:
         await db.artifacts.create_index("job_id")
         _logger.info("Mongo indexes ensured")
     except Exception as e:
-        _logger.error("Could not ensure indexes: %s", e)
-        # This could be a critical failure at startup
-        # depending on application requirements
+        _logger.critical("Could not ensure indexes: %s. Application will shut down.", e)
+        raise
 
 
 # You might want a function to close the connection gracefully during shutdown
