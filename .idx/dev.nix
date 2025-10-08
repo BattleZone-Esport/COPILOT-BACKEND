@@ -7,6 +7,10 @@
   packages = [
     pkgs.python311
     pkgs.python311Packages.pip
+    pkgs.python311Packages.authlib
+    pkgs.python311Packages.python-jose
+    pkgs.python311Packages.cryptography
+    pkgs.python311Packages.jinja2
   ];
 
   # Sets environment variables in the workspace

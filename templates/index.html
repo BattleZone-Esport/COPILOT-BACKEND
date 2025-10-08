@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Ureshii Partner App</title>
+</head>
+<body>
+    <h1>Welcome to Ureshii Partner App</h1>
+    {% if request.session.user %}
+        <p>Hello, {{ request.session.user.name }}!</p>
+        <p><a href="/v1/auth/logout">Logout</a></p>
+    {% else %}
+        <p><a href="/v1/auth/login">Login</a></p>
+    {% endif %}
+</body>
+</html>

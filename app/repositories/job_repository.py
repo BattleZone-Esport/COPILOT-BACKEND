@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional, List
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -19,12 +19,18 @@ class JobRepository:
         await self.db.jobs.insert_one(data.model_dump())
 
     async def update_job_status(self, job_id: str, status: str, error: Optional[Dict[str, Any]] = None,
-                                final_output: Optional[str] = None) -> None:
-        update = {"$set": {"status": status, "updated_at": datetime.utcnow()}}
+                                final_output: Optional[str] = None, intermediate_message: Optional[str] = None,
+                                intermediate_output: Optional[str] = None) -> None:
+        now = datetime.now(timezone.utc)
+        update = {"$set": {"status": status, "updated_at": now}}
         if error:
             update["$set"]["error"] = error
         if final_output is not None:
             update["$set"]["final_output"] = final_output
+        if intermediate_message is not None:
+            update["$set"]["intermediate_message"] = intermediate_message
+        if intermediate_output is not None:
+            update["$set"]["intermediate_output"] = intermediate_output
         await self.db.jobs.update_one({"job_id": job_id}, update)
 
     async def get_job_public(self, job_id: str) -> Optional[JobPublic]:
@@ -42,6 +48,9 @@ class JobRepository:
         await self.db.runs.insert_one(run.model_dump())
 
     async def update_run(self, job_id: str, agent: str, update: Dict[str, Any]) -> None:
+        now = datetime.now(timezone.utc)
+        if "completed_at" not in update:
+            update["updated_at"] = now
         await self.db.runs.update_one({"job_id": job_id, "agent": agent}, {"$set": update})
 
     async def add_artifact(self, art: ArtifactRecord) -> None:

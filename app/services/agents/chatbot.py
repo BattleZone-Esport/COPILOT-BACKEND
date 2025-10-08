@@ -2,13 +2,15 @@
 from __future__ import annotations
 import logging
 from app.services.ai.openrouter_client import OpenRouterClient
+from app.core.config import get_settings
 
 _logger = logging.getLogger(__name__)
 
 class ChatbotAgent:
     def __init__(self):
         self.client = OpenRouterClient()
-        self.model = "qwen/qwen3-30b-a3b:free"
+        settings = get_settings()
+        self.model = settings.DEFAULT_CHATBOT_MODEL
 
     async def run(self, prompt: str) -> str:
         _logger.info(f"Running chatbot with prompt: {prompt}")

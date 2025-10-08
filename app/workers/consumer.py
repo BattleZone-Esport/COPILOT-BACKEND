@@ -7,8 +7,8 @@ from app.core.config import get_settings
 from app.db.mongo import ensure_indexes, get_db
 from app.queues.redis_queue import RedisQueue
 from app.services.orchestrator import Orchestrator
+from app.models.schemas import JobOptions
 
-logging.basicConfig(level=logging.INFO)
 _logger = logging.getLogger("worker")
 
 
@@ -29,24 +29,26 @@ async def main():
             continue
         job_id = job.get("job_id")
         prompt = job.get("prompt")
-        options = job.get("options")
+        options_data = job.get("options")
         if not job_id:
             _logger.warning("Job missing job_id: %s", job)
             continue
 
-        if not prompt or not options:
+        if not prompt or not options_data:
             try:
                 db = await get_db()
                 doc = await db.jobs.find_one({"job_id": job_id})
                 if doc:
                     prompt = prompt or doc.get("prompt")
-                    options = options or doc.get("options")
+                    options_data = options_data or doc.get("options")
             except Exception:
                 _logger.exception("Failed fetching job %s from DB", job_id)
 
-        if not prompt or not options:
+        if not prompt or not options_data:
             _logger.warning("Job %s missing prompt/options after DB fetch, skipping", job_id)
             continue
+
+        options = JobOptions(**options_data)
 
         try:
             lock = q.client.lock(f"job:lock:{job_id}", timeout=300)
@@ -56,7 +58,7 @@ async def main():
                 continue
 
             try:
-                await orch.run_pipeline(job_id, prompt, options)
+                await orch.run(job_id=job_id, prompt=prompt, options=options)
             finally:
                 try:
                     await lock.release()

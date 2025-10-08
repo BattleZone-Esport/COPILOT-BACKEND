@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
 from app.core.config import get_settings
@@ -31,13 +31,14 @@ class Orchestrator:
         self.fixer = FixerAgent()
         self.chatbot = ChatbotAgent()
 
-    async def create_job(self, prompt: str, options: JobOptions) -> str:
+    async def create_job(self, prompt: str, options: JobOptions, user_id: Optional[str] = None) -> str:
         job_id = str(uuid.uuid4())
         db = await get_db()
         repo = JobRepository(db)
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         job = JobCreate(
             job_id=job_id,
+            user_id=user_id,
             prompt=prompt,
             options=options,
             status="queued" if options.mode == "queue" else "running",
@@ -83,24 +84,24 @@ class Orchestrator:
         try:
             # Coder Agent
             await repo.update_job_status(job_id, "running", intermediate_message="Generating code with Ureshii-P1...")
-            run = RunRecord(job_id=job_id, agent="coder", input=prompt, status="running", started_at=datetime.utcnow())
+            run = RunRecord(job_id=job_id, agent="coder", input=prompt, status="running", started_at=datetime.now(timezone.utc))
             await repo.add_run(run)
             coder_res = await self.coder.run(job_id, prompt, coder_model)
             await repo.update_run(job_id, "coder", {
                 "output": coder_res.output,
                 "status": "succeeded",
-                "completed_at": datetime.utcnow(),
+                "completed_at": datetime.now(timezone.utc),
             })
             await repo.add_artifact(ArtifactRecord(
                 job_id=job_id, agent="coder", type="code",
-                content=coder_res.artifact_content, created_at=datetime.utcnow()
+                content=coder_res.artifact_content, created_at=datetime.now(timezone.utc)
             ))
 
             await repo.update_job_status(job_id, "debugging", intermediate_message="Code generated, debugging in progress...", intermediate_output=coder_res.output)
 
             # Debugger Agent
             debug_input = coder_res.output or ""
-            run = RunRecord(job_id=job_id, agent="debugger", input=debug_input, status="running", started_at=datetime.utcnow())
+            run = RunRecord(job_id=job_id, agent="debugger", input=debug_input, status="running", started_at=datetime.now(timezone.utc))
             await repo.add_run(run)
             dbg_res = await self.debugger.run(job_id, debug_input, debugger_model)
 
@@ -113,17 +114,17 @@ class Orchestrator:
             await repo.update_run(job_id, "debugger", {
                 "output": dbg_res.output,
                 "status": "succeeded",
-                "completed_at": datetime.utcnow(),
+                "completed_at": datetime.now(timezone.utc),
             })
             await repo.add_artifact(ArtifactRecord(
                 job_id=job_id, agent="debugger", type="report",
-                content=dbg_res.artifact_content, created_at=datetime.utcnow()
+                content=dbg_res.artifact_content, created_at=datetime.now(timezone.utc)
             ))
             await repo.update_job_status(job_id, "fixing", intermediate_message=f"Debugging complete. Report: {dbg_res.output}. Fixing code...", intermediate_output=coder_res.output)
 
             # Fixer Agent
             fixer_input = f"Original code:\n{coder_res.output or ''}\n\nDebugger report:\n{dbg_res.output or ''}\n\nReturn only corrected code."
-            run = RunRecord(job_id=job_id, agent="fixer", input=fixer_input, status="running", started_at=datetime.utcnow())
+            run = RunRecord(job_id=job_id, agent="fixer", input=fixer_input, status="running", started_at=datetime.now(timezone.utc))
             await repo.add_run(run)
             fixer_res = await self.fixer.run(job_id, fixer_input, fixer_model)
 
@@ -136,11 +137,11 @@ class Orchestrator:
             await repo.update_run(job_id, "fixer", {
                 "output": fixer_res.output,
                 "status": "succeeded",
-                "completed_at": datetime.utcnow(),
+                "completed_at": datetime.now(timezone.utc),
             })
             await repo.add_artifact(ArtifactRecord(
                 job_id=job_id, agent="fixer", type="code",
-                content=fixer_res.artifact_content, created_at=datetime.utcnow()
+                content=fixer_res.artifact_content, created_at=datetime.now(timezone.utc)
             ))
 
             final = fixer_res.output or ""

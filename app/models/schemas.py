@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 
 
-JobStatus = Literal["queued", "running", "succeeded", "failed"]
+JobStatus = Literal["queued", "running", "succeeded", "failed", "debugging", "fixing"]
 AgentName = Literal["coder", "debugger", "fixer", "chatbot"]
 
 
@@ -24,6 +24,7 @@ class PromptRequest(BaseModel):
 
 class JobCreate(BaseModel):
     job_id: str
+    user_id: Optional[str] = None
     prompt: str
     options: JobOptions
     status: JobStatus = "queued"
@@ -37,6 +38,8 @@ class JobPublic(BaseModel):
     created_at: datetime
     updated_at: datetime
     error: Optional[Dict[str, Any]] = None
+    intermediate_message: Optional[str] = None
+    intermediate_output: Optional[str] = None
 
 
 class JobResult(BaseModel):

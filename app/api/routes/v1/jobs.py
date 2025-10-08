@@ -3,9 +3,9 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from app.api.deps import get_orchestrator
 from app.core.config import get_settings
 from app.db.mongo import get_db
@@ -17,14 +17,27 @@ from app.queues.qstash import QStashPublisher
 router = APIRouter(prefix="/v1/jobs", tags=["jobs"])
 _logger = logging.getLogger(__name__)
 
+async def get_user_id_from_session(request: Request) -> Optional[str]:
+    user = request.session.get("user")
+    if user and "email" in user: # Using email as a proxy for user_id for now
+        # In a real app, you'd probably have a user_id in the session
+        db = await get_db()
+        user_record = await db.users.find_one({"email": user["email"]})
+        if user_record:
+            return user_record.get("user_id")
+    return None
 
 @router.post("", response_model=JobPublic)
-async def create_job(payload: PromptRequest, orchestrator=Depends(get_orchestrator)) -> JobPublic:
+async def create_job(
+    payload: PromptRequest, 
+    orchestrator=Depends(get_orchestrator), 
+    user_id: Optional[str] = Depends(get_user_id_from_session)
+) -> JobPublic:
     settings = get_settings()
     if payload.prompt and len(payload.prompt) > settings.PROMPT_MAX_CHARS:
         raise HTTPException(status_code=413, detail=f"Prompt too large (max {settings.PROMPT_MAX_CHARS} chars)")
 
-    job_id = await orchestrator.create_job(payload.prompt, payload.options)
+    job_id = await orchestrator.create_job(payload.prompt, payload.options, user_id=user_id)
 
     if payload.options.mode == "queue":
         if settings.QUEUE_BACKEND == "redis":

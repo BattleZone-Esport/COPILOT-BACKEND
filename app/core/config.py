@@ -14,6 +14,13 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "info"
     APP_CORS_ORIGINS: str = "*"
 
+    # Auth
+    AUTH_ENABLED: bool = True
+    AUTH_SECRET_KEY: Optional[str] = Field(default=None, repr=False)
+    AUTH_PROVIDER: Literal["google"] = "google"
+    AUTH_GOOGLE_CLIENT_ID: Optional[str] = Field(default=None, repr=False)
+    AUTH_GOOGLE_CLIENT_SECRET: Optional[str] = Field(default=None, repr=False)
+
     # DB
     MONGODB_URI: Optional[str] = None
     MONGO_URI: Optional[str] = None  # alias accepted
@@ -28,6 +35,7 @@ class Settings(BaseSettings):
     DEFAULT_CODER_MODEL: str = "qwen/qwen3-coder:free"
     DEFAULT_DEBUGGER_MODEL: str = "deepseek/deepseek-chat-v3.1:free"
     DEFAULT_FIXER_MODEL: str = "nvidia/nemotron-nano-9b-v2:free"
+    DEFAULT_CHATBOT_MODEL: str = "qwen/qwen3-30b-a3b:free"
 
     # Queue
     QUEUE_BACKEND: Literal["redis", "qstash", "none"] = "redis"
