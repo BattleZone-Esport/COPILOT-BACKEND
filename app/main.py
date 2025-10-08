@@ -16,7 +16,7 @@ from app.db.mongo import ensure_indexes, get_db, close_db_connection
 from app.api.routes.v1.jobs import router as jobs_router
 from app.api.routes.v1.webhooks import router as webhooks_router
 from app.api.routes.v1.auth import router as auth_router
-from redis.asyncio import from_url as redis_from_url
+from app.queues.redis_queue import get_redis_client, close_redis_client
 
 _logger = logging.getLogger(__name__)
 
@@ -26,8 +26,13 @@ async def lifespan(app: FastAPI):
     setup_logging(settings.LOG_LEVEL)
     _logger.info("Starting %s", settings.APP_NAME)
     await ensure_indexes()
+    # Initialize Redis client if configured
+    if settings.QUEUE_BACKEND == "redis":
+        get_redis_client()
     yield
     await close_db_connection()
+    if settings.QUEUE_BACKEND == "redis":
+        await close_redis_client()
     _logger.info("Shutting down %s", settings.APP_NAME)
 
 def create_app() -> FastAPI:
@@ -40,7 +45,7 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origins,
+        allow_origins=settings.APP_CORS_ORIGINS,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -57,7 +62,8 @@ def create_app() -> FastAPI:
 
     @app.get("/")
     async def root(request: Request):
-        return templates.TemplateResponse("index.html", {"request": request, "user": request.session.get('user')})
+        user = request.session.get('user')
+        return templates.TemplateResponse("index.html", {"request": request, "user": user})
 
     @app.get("/health")
     async def health():
@@ -79,12 +85,12 @@ def create_app() -> FastAPI:
             ok = False
 
         # Redis check (only if configured)
-        if settings.QUEUE_BACKEND == "redis" and settings.REDIS_URL:
+        if settings.QUEUE_BACKEND == "redis":
             try:
-                client = redis_from_url(settings.REDIS_URL, socket_connect_timeout=2)
-                await client.ping()
+                client = get_redis_client()
+                if not await client.ping():
+                    raise Exception("Redis ping failed")
                 details["redis"] = "ok"
-                await client.close()
             except Exception as e:
                 _logger.error("Redis health check failed: %s", e)
                 details["redis"] = "error"

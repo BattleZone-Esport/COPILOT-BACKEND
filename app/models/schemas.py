@@ -1,9 +1,9 @@
-
 from __future__ import annotations
-from typing import Optional, Literal, List, Dict, Any
-from pydantic import BaseModel, Field
-from datetime import datetime
 
+from datetime import datetime
+from typing import Any, Dict, List, Literal, Optional
+
+from pydantic import BaseModel, Field
 
 JobStatus = Literal["queued", "running", "succeeded", "failed", "debugging", "fixing"]
 AgentName = Literal["coder", "debugger", "fixer", "chatbot"]
@@ -40,6 +40,12 @@ class JobPublic(BaseModel):
     error: Optional[Dict[str, Any]] = None
     intermediate_message: Optional[str] = None
     intermediate_output: Optional[str] = None
+
+
+class JobListPublic(BaseModel):
+    """Public-facing model for a list of jobs."""
+
+    jobs: List[JobPublic]
 
 
 class JobResult(BaseModel):

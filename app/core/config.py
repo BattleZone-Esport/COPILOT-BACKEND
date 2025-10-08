@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     QSTASH_CALLBACK_URL: Optional[AnyUrl] = None
     GCP_PROJECT_ID: Optional[str] = None
     GCP_PUBSUB_TOPIC: Optional[str] = None
+    JOB_LOCK_TIMEOUT: int = 300
 
     @field_validator("APP_CORS_ORIGINS")
     def build_cors_origins(cls, v: str) -> List[str]:

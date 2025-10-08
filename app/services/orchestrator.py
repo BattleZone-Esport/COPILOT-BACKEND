@@ -14,6 +14,7 @@ from app.services.agents.coder import CoderAgent
 from app.services.agents.debugger import DebuggerAgent
 from app.services.agents.fixer import FixerAgent
 from app.services.agents.chatbot import ChatbotAgent
+from app.queues.redis_queue import RedisQueue
 
 _logger = logging.getLogger(__name__)
 
@@ -47,6 +48,13 @@ class Orchestrator:
             updated_at=now,
         )
         await repo.create_job(job)
+        if options.mode == "queue":
+            q = RedisQueue()
+            await q.push({
+                "job_id": job_id,
+                "prompt": prompt,
+                "options": options.model_dump(),
+            })
         return job_id
 
     async def run(self, job_id: str, prompt: str, options: JobOptions) -> Dict[str, Any]:
