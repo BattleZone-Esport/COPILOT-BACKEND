@@ -6,7 +6,8 @@ from typing import Any, Dict
 from fastapi import APIRouter, Request, HTTPException, Depends
 from app.core.config import get_settings
 from app.api.deps import get_orchestrator
-from app.models.schemas import JobOptions, JobRepository
+from app.models.schemas import JobOptions
+from app.repositories.job_repository import JobRepository
 from app.queues.qstash import QStashPublisher
 from app.db.mongo import get_db
 
