@@ -5,6 +5,8 @@ from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
+from app.core.config import get_settings
+
 JobStatus = Literal["queued", "running", "succeeded", "failed", "debugging", "fixing"]
 AgentName = Literal["coder", "debugger", "fixer", "chatbot"]
 
@@ -18,7 +20,12 @@ class JobOptions(BaseModel):
 
 
 class PromptRequest(BaseModel):
-    prompt: str = Field(..., min_length=1, max_length=16000)
+    prompt: str = Field(
+        ...,
+        min_length=1,
+        max_length=get_settings().PROMPT_MAX_CHARS,
+        description="The main prompt for the job.",
+    )
     options: JobOptions = Field(default_factory=JobOptions)
 
 
