@@ -3,11 +3,24 @@ from typing import Any, Optional
 from jose import jwt
 from cryptography.fernet import Fernet
 import base64
+import hashlib
+
+# A salt should be unique and stored securely. For this example, we'll use a
+# hardcoded salt. In a production environment, consider a better salt management strategy.
+PBKDF2_SALT = b'\xdaI\x99\x0fX\x85\x9b\x93\xeb\x1a\x0e\x1f\r\x1a\x1b\x1d' # Example 16-byte salt
 
 def _fernet_from_secret(secret: str) -> Fernet:
-    # derive 32-byte key from secret (urlsafe base64). Pad/truncate deterministically.
-    raw = secret.encode("utf-8")
-    key = base64.urlsafe_b64encode((raw + b"0" * 32)[:32])
+    """
+    Derive a 32-byte key from the secret using PBKDF2 for use with Fernet.
+    """
+    kdf = hashlib.pbkdf2_hmac(
+        'sha256',
+        secret.encode('utf-8'),
+        PBKDF2_SALT,
+        100000, # Recommended number of iterations
+        dklen=32  # Fernet keys must be 32 bytes
+    )
+    key = base64.urlsafe_b64encode(kdf)
     return Fernet(key)
 
 def create_access_token(data: dict[str, Any], secret: str, algorithm: str, minutes: int) -> str:
