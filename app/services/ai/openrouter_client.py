@@ -3,21 +3,24 @@ from __future__ import annotations
 import logging
 from typing import Optional, List, Dict, Any
 
+import httpx
 from openai import AsyncOpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from openai import APIStatusError, APIConnectionError, RateLimitError
 
 from app.core.config import get_settings
+from app.core.http_client import get_http_client
 
 _logger = logging.getLogger(__name__)
 
 
 class OpenRouterClient:
-    def __init__(self):
+    def __init__(self, http_client: httpx.AsyncClient):
         s = get_settings()
         self.client = AsyncOpenAI(
             base_url="https://openrouter.ai/api/v1",
             api_key=s.OPENROUTER_API_KEY or None,
+            http_client=http_client,
         )
         self.extra_headers = {}
         if s.OPENROUTER_SITE_URL:
@@ -54,3 +57,9 @@ class OpenRouterClient:
         )
         out = resp.choices[0].message.content or ""
         return out.strip()
+
+
+async def get_openrouter_client(
+    http_client: httpx.AsyncClient = await get_http_client(),
+) -> OpenRouterClient:
+    return OpenRouterClient(http_client)

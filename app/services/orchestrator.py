@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+import base64
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
@@ -15,13 +16,15 @@ from app.services.agents.debugger import DebuggerAgent
 from app.services.agents.fixer import FixerAgent
 from app.services.agents.chatbot import ChatbotAgent
 from app.queues.redis_queue import RedisQueue
+from app.services.github_client import GitHubClient, get_github_client
 
 _logger = logging.getLogger(__name__)
 
 
 class Orchestrator:
-    def __init__(self):
+    def __init__(self, github_client: GitHubClient):
         s = get_settings()
+        self.github_client = github_client
         self.defaults = {
             "coder": s.DEFAULT_CODER_MODEL,
             "debugger": s.DEFAULT_DEBUGGER_MODEL,
@@ -58,7 +61,6 @@ class Orchestrator:
         return job_id
 
     async def run(self, job_id: str, prompt: str, options: JobOptions) -> Dict[str, Any]:
-        # Default to the coding pipeline if mode is not specified
         mode = options.pipeline_name or "ureshii-p1"
 
         if mode == "chat":
@@ -102,7 +104,6 @@ class Orchestrator:
         async with await client.start_session() as session:
             async with session.start_transaction():
                 try:
-                    # Coder Agent
                     await repo.update_job_status(job_id, "running", intermediate_message="Generating code with Ureshii-P1...")
                     run = RunRecord(job_id=job_id, agent="coder", input=prompt, status="running", started_at=datetime.now(timezone.utc))
                     await repo.add_run(run)
@@ -119,7 +120,6 @@ class Orchestrator:
 
                     await repo.update_job_status(job_id, "debugging", intermediate_message="Code generated, debugging in progress...", intermediate_output=coder_res.output)
 
-                    # Debugger Agent
                     dbg_res = None
                     try:
                         debug_input = coder_res.output or ""
@@ -132,6 +132,7 @@ class Orchestrator:
                     if not dbg_res or not dbg_res.output:
                         _logger.warning("Debugger failed or returned no output for job %s. Falling back to coder's output.", job_id)
                         final = coder_res.output or ""
+                        await self.handle_github_pr(job_id, options, final, prompt, "Debugging failed, returning initial code.")
                         await repo.update_job_status(job_id, "succeeded", final_output=final)
                         return {"job_id": job_id, "status": "succeeded", "final_output": final, "message": "Debugging failed, returning initial generated code."}
 
@@ -146,7 +147,6 @@ class Orchestrator:
                     ))
                     await repo.update_job_status(job_id, "fixing", intermediate_message=f"Debugging complete. Report: {dbg_res.output}. Fixing code...", intermediate_output=coder_res.output)
 
-                    # Fixer Agent
                     fixer_res = None
                     try:
                         fixer_input = f"Original code:\n{coder_res.output or ''}\n\nDebugger report:\n{dbg_res.output or ''}\n\nReturn only corrected code."
@@ -160,6 +160,7 @@ class Orchestrator:
                     if not fixer_res or not fixer_res.output:
                         _logger.warning("Fixer failed or returned no output for job %s. Falling back to coder's output.", job_id)
                         final = coder_res.output or ""
+                        await self.handle_github_pr(job_id, options, final, prompt, "Fixer failed, returning initial code.")
                         await repo.update_job_status(job_id, "succeeded", final_output=final)
                         return {"job_id": job_id, "status": "succeeded", "final_output": final, "message": "Code fixing failed, returning initial generated code."}
 
@@ -174,6 +175,7 @@ class Orchestrator:
                     ))
 
                     final = fixer_res.output or ""
+                    await self.handle_github_pr(job_id, options, final, prompt, "Code generated and fixed.")
                     await repo.update_job_status(job_id, "succeeded", final_output=final)
                     return {"job_id": job_id, "status": "succeeded", "final_output": final}
 
@@ -186,3 +188,37 @@ class Orchestrator:
                     else:
                         await repo.update_job_status(job_id, "failed", error={"message": str(e)})
                         return {"job_id": job_id, "status": "failed", "error": str(e)}
+    
+    async def handle_github_pr(self, job_id: str, options: JobOptions, code: str, prompt: str, pr_body: str):
+        if not options.github_repo or not options.github_branch or not options.github_file_path:
+            _logger.warning(f"GitHub options not set for job {job_id}. Skipping PR creation.")
+            return
+
+        try:
+            repo_name = options.github_repo
+            base_branch = options.github_branch
+            file_path = options.github_file_path
+            new_branch = f"ureshii-bot/{job_id[:8]}"
+            commit_message = f"feat: ✨ Ureshii-Bot generated code for job {job_id}"
+            pr_title = f"Ureshii-Bot: {prompt[:50]}..."
+
+            await self.github_client.create_branch(repo_name, new_branch, base_branch)
+            
+            content_b64 = base64.b64encode(code.encode("utf-8")).decode("utf-8")
+            await self.github_client.create_or_update_file(
+                repo_name, file_path, content_b64, new_branch, commit_message
+            )
+            
+            pr = await self.github_client.create_pull_request(
+                repo_name, pr_title, new_branch, base_branch, pr_body
+            )
+            _logger.info(f"Created PR for job {job_id}: {pr['html_url']}")
+
+        except Exception as e:
+            _logger.exception(f"Failed to create GitHub PR for job {job_id}")
+
+
+async def get_orchestrator(
+    github_client: GitHubClient = await get_github_client(),
+) -> Orchestrator:
+    return Orchestrator(github_client)
