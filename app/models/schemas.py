@@ -31,6 +31,7 @@ class PromptRequest(BaseModel):
 
 class JobCreate(BaseModel):
     job_id: str
+    request_id: Optional[str] = None # For tracing
     user_id: Optional[str] = None
     prompt: str
     options: JobOptions
