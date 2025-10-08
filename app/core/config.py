@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import secrets
+import warnings
 from functools import lru_cache
-from typing import List, Optional, Literal
+from typing import List, Literal, Optional
+
+from pydantic import AnyUrl, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field, AnyUrl, field_validator, model_validator
 
 
 class Settings(BaseSettings):
@@ -12,7 +15,10 @@ class Settings(BaseSettings):
     # App
     APP_NAME: str = "Ureshii-Partner"
     LOG_LEVEL: str = "info"
-    APP_CORS_ORIGINS: str = "*"
+    ENVIRONMENT: Literal["development", "production"] = "development"
+
+    # CORS
+    APP_CORS_ORIGINS: List[str] = Field(default_factory=list)
 
     # Auth
     AUTH_ENABLED: bool = True
@@ -40,7 +46,6 @@ class Settings(BaseSettings):
         "google/gemini-pro",
     ]
 
-
     # Queues
     QUEUE_BACKEND: Literal["redis", "gcp-pubsub", "qstash", "none"] = "none"
     REDIS_URL: Optional[AnyUrl] = None
@@ -50,15 +55,38 @@ class Settings(BaseSettings):
     GCP_PUBSUB_TOPIC: Optional[str] = None
     JOB_LOCK_TIMEOUT: int = 300
 
-    @field_validator("APP_CORS_ORIGINS")
-    def build_cors_origins(cls, v: str) -> List[str]:
-        return [origin.strip() for origin in v.split(",")]
+    @field_validator("APP_CORS_ORIGINS", mode="before")
+    @classmethod
+    def _parse_cors_origins(cls, v):
+        if isinstance(v, str):
+            return [origin.strip() for origin in v.split(",") if origin.strip()]
+        return v
 
-    @model_validator(mode='after')
-    def check_auth_secret_key(self) -> 'Settings':
+    @model_validator(mode="after")
+    def _check_settings(self) -> "Settings":
+        # Check Auth Secret Key
         if self.AUTH_ENABLED and not self.AUTH_SECRET_KEY:
-            raise ValueError("AUTH_SECRET_KEY must be set when AUTH_ENABLED is True")
+            if self.ENVIRONMENT == "production":
+                raise ValueError(
+                    "AUTH_SECRET_KEY must be set in production when AUTH_ENABLED is True"
+                )
+            else:
+                self.AUTH_SECRET_KEY = secrets.token_hex(32)
+                warnings.warn(
+                    "AUTH_SECRET_KEY was not set. A temporary key has been generated for development. "
+                    "Please set a permanent key in your .env file for production.",
+                    UserWarning,
+                )
+
+        # Check CORS Origins
+        if self.ENVIRONMENT == "production" and "*" in self.APP_CORS_ORIGINS:
+            warnings.warn(
+                "Using '*' for APP_CORS_ORIGINS in production is a security risk. "
+                "It is recommended to specify the exact origins.",
+                UserWarning,
+            )
         return self
+
 
 @lru_cache()
 def get_settings():
