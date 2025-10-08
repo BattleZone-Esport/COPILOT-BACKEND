@@ -5,6 +5,7 @@ from authlib.integrations.starlette_client import OAuth
 from app.core.config import get_settings, Settings
 from app.db.mongo import get_db
 from app.repositories.user_repository import get_user_by_email, create_user, touch_last_login, update_user
+from app.core.security import generate_csrf_token
 from datetime import datetime, timezone
 import uuid
 import json
@@ -35,6 +36,7 @@ async def login(request: Request):
 @router.get('/logout')
 async def logout(request: Request):
     request.session.pop('user', None)
+    request.session.pop('csrf_token', None)
     return RedirectResponse(url='/')
 
 @router.get('/google/login')
@@ -72,6 +74,9 @@ async def google_callback(request: Request, settings: Settings = Depends(get_set
         'email': user['email'],
         'picture': user.get('avatar_url')
     }
+
+    csrf_token = generate_csrf_token()
+    request.session['csrf_token'] = csrf_token
     
     await touch_last_login(db, user["user_id"])
     return RedirectResponse(url='/')

@@ -4,6 +4,7 @@ from jose import jwt
 from cryptography.fernet import Fernet
 import base64
 import hashlib
+import secrets
 
 # A salt should be unique and stored securely. For this example, we'll use a
 # hardcoded salt. In a production environment, consider a better salt management strategy.
@@ -45,3 +46,13 @@ def encrypt_oauth_token(token_json: str, secret: str) -> str:
 def decrypt_oauth_token(token_cipher: str, secret: str) -> str:
     f = _fernet_from_secret(secret)
     return f.decrypt(token_cipher.encode("utf-8")).decode("utf-8")
+
+def generate_csrf_token() -> str:
+    """Generate a CSRF token."""
+    return secrets.token_urlsafe(32)
+
+def validate_csrf_token(session_csrf_token: Optional[str], request_csrf_token: Optional[str]) -> bool:
+    """Validate the CSRF token in a constant-time manner."""
+    if session_csrf_token is None or request_csrf_token is None:
+        return False
+    return secrets.compare_digest(session_csrf_token, request_csrf_token)

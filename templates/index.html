@@ -2,6 +2,9 @@
 <html>
 <head>
     <title>Ureshii Partner App</title>
+    {% if request.session.get('csrf_token') %}
+    <meta name="csrf-token" content="{{ request.session.get('csrf_token') }}">
+    {% endif %}
 </head>
 <body>
     <h1>Welcome to Ureshii Partner App</h1>
@@ -11,5 +14,25 @@
     {% else %}
         <p><a href="/v1/auth/login">Login</a></p>
     {% endif %}
+
+    <script>
+        // Function to get the CSRF token from the meta tag
+        function getCsrfToken() {
+            return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        }
+
+        // Example of how to use it in a POST request
+        async function createJob(prompt) {
+            const csrfToken = getCsrfToken();
+            const response = await fetch('/v1/jobs', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',n                    'X-CSRF-Token': csrfToken
+                },
+                body: JSON.stringify({ prompt: prompt, options: { mode: 'sync' } })
+            });
+            return response.json();
+        }
+    </script>
 </body>
 </html>

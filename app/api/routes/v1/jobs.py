@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from app.api.deps import get_orchestrator
+from app.api.deps import get_orchestrator, validate_csrf
 from app.core.config import get_settings
 from app.db.mongo import get_db, AsyncIOMotorDatabase
 from app.models.schemas import PromptRequest, JobPublic
@@ -26,7 +26,7 @@ async def get_user_id_from_session(request: Request, db: AsyncIOMotorDatabase = 
             return user_record.get("user_id")
     return None
 
-@router.post("", response_model=JobPublic)
+@router.post("", response_model=JobPublic, dependencies=[Depends(validate_csrf)])
 async def create_job(
     payload: PromptRequest, 
     orchestrator=Depends(get_orchestrator), 
