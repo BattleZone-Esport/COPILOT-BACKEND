@@ -4,6 +4,7 @@ import logging
 from typing import Any, Dict
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from pymongo.errors import ConnectionFailure
+from fastapi import HTTPException
 
 from app.core.config import get_settings
 
