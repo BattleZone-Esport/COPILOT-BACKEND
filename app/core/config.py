@@ -1,3 +1,4 @@
+
 from __future__ import annotations
 
 import secrets
@@ -53,11 +54,15 @@ class Settings(BaseSettings):
         "openai/gpt-4",
         "anthropic/claude-2",
         "google/gemini-pro",
+        "qwen/qwen3-30b-a3b:free",
+        "qwen/qwen3-coder:free",
+        "deepseek/deepseek-chat-v3.1:free",
+        "nvidia/nemotron-nano-9b-v2:free",
     ]
-    DEFAULT_CODER_MODEL: str = "anthropic/claude-2"
-    DEFAULT_DEBUGGER_MODEL: str = "google/gemini-pro"
-    DEFAULT_FIXER_MODEL: str = "openai/gpt-4"
-    DEFAULT_CHATBOT_MODEL: str = "openai/gpt-3.5-turbo"
+    DEFAULT_CODER_MODEL: str = "qwen/qwen3-coder:free"
+    DEFAULT_DEBUGGER_MODEL: str = "deepseek/deepseek-chat-v3.1:free"
+    DEFAULT_FIXER_MODEL: str = "nvidia/nemotron-nano-9b-v2:free"
+    DEFAULT_CHATBOT_MODEL: str = "qwen/qwen3-30b-a3b:free"
 
     # Queues
     QUEUE_BACKEND: Literal["redis", "gcp-pubsub", "qstash", "none"] = "none"
