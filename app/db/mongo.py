@@ -76,3 +76,6 @@ async def close_db_connection():
     if _client:
         _client.close()
         _logger.info("MongoDB connection closed.")
+
+connect_to_mongo = get_db
+close_mongo_connection = close_db_connection
