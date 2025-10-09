@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ureshii-config
+  namespace: default
+data:
+  APP_NAME: "Ureshii-Partner"
+  PROJECT_NAME: "Ureshii-Partner Backend"
+  PROJECT_VERSION: "1.0.0"
+  API_V1_STR: "/api/v1"
+  ENVIRONMENT: "production"
+  LOG_LEVEL: "info"
+  
+  # CORS
+  APP_CORS_ORIGINS: "https://app.ureshii.example.com,https://admin.ureshii.example.com"
+  
+  # Database
+  MONGODB_DB: "ureshii_partner"
+  
+  # Queue
+  QUEUE_BACKEND: "redis"
+  JOB_LOCK_TIMEOUT: "300"
+  
+  # Models
+  PROMPT_MAX_CHARS: "2000"
+  DEFAULT_CODER_MODEL: "qwen/qwen3-coder:free"
+  DEFAULT_DEBUGGER_MODEL: "deepseek/deepseek-chat-v3.1:free"
+  DEFAULT_FIXER_MODEL: "nvidia/nemotron-nano-9b-v2:free"
+  DEFAULT_CHATBOT_MODEL: "qwen/qwen3-30b-a3b:free"
+  
+  # Auth
+  AUTH_ENABLED: "true"
+  AUTH_PROVIDER: "google"
+  
+  # OpenRouter
+  OPENROUTER_SITE_URL: "https://api.ureshii.example.com"
+  OPENROUTER_SITE_NAME: "Ureshii Terminal"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ureshii-secrets
+  namespace: default
+type: Opaque
+stringData:
+  # MongoDB
+  MONGODB_URI: "mongodb://admin:changeme@mongodb:27017/ureshii_partner?authSource=admin"
+  
+  # Redis
+  REDIS_URL: "redis://:changeme@redis:6379/0"
+  
+  # Auth
+  AUTH_SECRET_KEY: "your-secret-key-here-change-in-production"
+  AUTH_GOOGLE_CLIENT_ID: "your-google-client-id"
+  AUTH_GOOGLE_CLIENT_SECRET: "your-google-client-secret"
+  
+  # OpenRouter
+  OPENROUTER_API_KEY: "your-openrouter-api-key"
+  
+  # OpenAI (optional)
+  OPENAI_API_KEY: "your-openai-api-key"
+  
+  # GitHub (optional)
+  GITHUB_TOKEN: "your-github-token"
+  
+  # QStash (optional)
+  QSTASH_URL: "https://qstash.upstash.io/v2"
+  QSTASH_TOKEN: "your-qstash-token"
+  QSTASH_CURRENT_SIGNING_KEY: "your-signing-key"
+  QSTASH_NEXT_SIGNING_KEY: "your-next-signing-key"
+  QSTASH_DESTINATION_URL: "https://api.ureshii.example.com/api/v1/webhooks/qstash"

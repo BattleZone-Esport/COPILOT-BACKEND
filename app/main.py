@@ -8,12 +8,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exception_handlers import http_exception_handler
+from prometheus_client import make_asgi_app
 
-from app.api.routes.v1 import jobs, webhooks, auth
+from app.api.routes.v1 import jobs, webhooks, auth, terminal
 from app.core.config import get_settings
 from app.core.logging import setup_logging
-from app.db.mongo import connect_to_mongo, close_mongo_connection
+from app.db.mongo_improved import connect_to_mongo, close_mongo_connection, get_mongo_health
 from app.queues import shutdown_queue
+from app.middleware.error_handling import ErrorHandlingMiddleware
+from app.middleware.security import SecurityMiddleware
+from app.middleware.monitoring import MonitoringMiddleware
 
 
 @asynccontextmanager
@@ -36,9 +40,24 @@ def create_app() -> FastAPI:
         title=settings.PROJECT_NAME,
         version=settings.PROJECT_VERSION,
         openapi_url=f"{settings.API_V1_STR}/openapi.json",
+        docs_url="/docs",
+        redoc_url="/redoc",
         lifespan=lifespan,
     )
+    
+    # Store settings in app state for middleware access
+    app.state.settings = settings
 
+    # Add custom middleware (order matters - apply in reverse order of desired execution)
+    # Error handling should be the outermost (first to catch, last to process)
+    app.add_middleware(ErrorHandlingMiddleware)
+    
+    # Monitoring middleware
+    app.add_middleware(MonitoringMiddleware)
+    
+    # Security middleware
+    app.add_middleware(SecurityMiddleware)
+    
     # Add session middleware (MUST be added before CORS)
     app.add_middleware(
         SessionMiddleware,
@@ -55,24 +74,40 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    
+    # Mount Prometheus metrics endpoint
+    metrics_app = make_asgi_app()
+    app.mount("/metrics", metrics_app)
 
     # API V1 routes
     app.include_router(auth.router, prefix=f"{settings.API_V1_STR}/auth", tags=["auth"])
     app.include_router(jobs.router, prefix=f"{settings.API_V1_STR}/jobs", tags=["jobs"])
     app.include_router(webhooks.router, prefix=f"{settings.API_V1_STR}/webhooks", tags=["webhooks"])
+    app.include_router(terminal.router, prefix=f"{settings.API_V1_STR}/terminal", tags=["terminal"])
     
     # Health check endpoint
     @app.get("/healthz")
     async def health_check():
         """Health check endpoint for monitoring and load balancers."""
+        # Get MongoDB health status
+        try:
+            mongo_health = await get_mongo_health()
+        except Exception as e:
+            mongo_health = {"healthy": False, "error": str(e)}
+        
+        # Determine overall health
+        is_healthy = mongo_health.get("healthy", False)
+        status_code = 200 if is_healthy else 503
+        
         return JSONResponse(
             content={
-                "status": "healthy",
+                "status": "healthy" if is_healthy else "degraded",
                 "service": settings.PROJECT_NAME,
                 "version": settings.PROJECT_VERSION,
-                "environment": settings.ENVIRONMENT
+                "environment": settings.ENVIRONMENT,
+                "database": mongo_health
             },
-            status_code=200
+            status_code=status_code
         )
     
     # Root endpoint
