@@ -1,3 +1,4 @@
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -17,6 +18,7 @@ class JobOptions(BaseModel):
     coder_model: Optional[str] = None
     debugger_model: Optional[str] = None
     fixer_model: Optional[str] = None
+    chatbot_model: Optional[str] = None
     github_repo: Optional[str] = None
     github_branch: Optional[str] = None
     github_file_path: Optional[str] = None
