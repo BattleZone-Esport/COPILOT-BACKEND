@@ -9,7 +9,7 @@ from app.db.mongo import get_db
 from app.models.schemas import JobOptions, WebhookPayload
 from app.repositories.job_repository import JobRepository
 from app.services.orchestrator import Orchestrator, get_orchestrator
-from app.queues.qstash import QStashPublisher
+from app.queues.qstash import QStashQueue
 
 router = APIRouter(prefix="/v1/webhooks", tags=["webhooks"])
 _logger = logging.getLogger(__name__)
@@ -20,13 +20,13 @@ async def qstash_webhook(
     request: Request, orchestrator: Orchestrator = Depends(get_orchestrator)
 ) -> Dict[str, Any]:
     settings = get_settings()
-    body = (await request.body()).decode()
+    body = await request.body()
 
     if settings.QSTASH_VERIFY_SIGNATURE:
         sig = request.headers.get("Upstash-Signature")
         if not sig:
             raise HTTPException(status_code=400, detail="Missing signature")
-        if not QStashPublisher.verify_signature(dict(request.headers), body):
+        if not QStashQueue.verify_signature(dict(request.headers), body):
             raise HTTPException(status_code=401, detail="Invalid signature")
 
     try:
