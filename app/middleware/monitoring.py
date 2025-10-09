@@ -5,6 +5,7 @@ Monitoring middleware for logging, metrics collection, and performance tracking.
 import logging
 import time
 import json
+import asyncio
 from typing import Any, Dict, Optional
 from uuid import uuid4
 from datetime import datetime, timezone
