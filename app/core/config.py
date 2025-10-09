@@ -15,6 +15,9 @@ class Settings(BaseSettings):
 
     # App
     APP_NAME: str = "Ureshii-Partner"
+    PROJECT_NAME: str = "Ureshii-Partner Backend"  # Added for FastAPI app title
+    PROJECT_VERSION: str = "1.0.0"  # Added for API versioning
+    API_V1_STR: str = "/api/v1"  # Added for API path prefix
     LOG_LEVEL: str = "info"
     ENVIRONMENT: Literal["development", "production"] = "development"
 

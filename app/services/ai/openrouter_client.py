@@ -60,5 +60,5 @@ class OpenRouterClient:
 
 
 async def get_openrouter_client() -> OpenRouterClient:
-    http_client = await get_http_client()
+    http_client = get_http_client()  # This returns a client directly, not async
     return OpenRouterClient(http_client)

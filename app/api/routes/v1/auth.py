@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 import uuid
 import json
 
-router = APIRouter(prefix="/v1/auth", tags=["auth"])
+router = APIRouter(tags=["auth"])  # prefix will be added in main.py
 templates = Jinja2Templates(directory="templates")
 
 def build_oauth(settings: Settings):
@@ -38,6 +38,23 @@ async def logout(request: Request):
     request.session.pop('user', None)
     request.session.pop('csrf_token', None)
     return RedirectResponse(url='/')
+
+@router.get('/csrf')
+async def get_csrf_token(request: Request):
+    """Get or generate a CSRF token for the current session."""
+    csrf_token = request.session.get('csrf_token')
+    if not csrf_token:
+        csrf_token = generate_csrf_token()
+        request.session['csrf_token'] = csrf_token
+    return {"csrf_token": csrf_token}
+
+@router.get('/me')
+async def get_current_user(request: Request):
+    """Get the current authenticated user from session."""
+    user = request.session.get('user')
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return user
 
 @router.get('/google/login')
 async def google_login(request: Request, settings: Settings = Depends(get_settings)):

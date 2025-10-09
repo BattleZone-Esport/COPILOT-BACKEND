@@ -14,7 +14,8 @@ pymongo==4.5.0
 
 # --- Queues ---
 # Choose one of the following based on your backend
-arq==0.25.0  # For Redis
+redis==5.0.1  # Redis client with async support
+arq==0.25.0  # For Redis (optional, not used in current implementation)
 # For QStash, you might use a general-purpose HTTP client
 httpx==0.25.1
 

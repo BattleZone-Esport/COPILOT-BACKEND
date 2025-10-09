@@ -11,7 +11,7 @@ from app.repositories.job_repository import JobRepository
 from app.services.orchestrator import Orchestrator, get_orchestrator
 from app.queues.qstash import QStashQueue
 
-router = APIRouter(prefix="/v1/webhooks", tags=["webhooks"])
+router = APIRouter(tags=["webhooks"])  # prefix will be added in main.py
 _logger = logging.getLogger(__name__)
 
 

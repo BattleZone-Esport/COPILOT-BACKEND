@@ -11,7 +11,7 @@ from app.db.mongo import AsyncIOMotorDatabase, get_db
 from app.models.schemas import JobListPublic, JobPublic, PromptRequest
 from app.repositories.job_repository import JobRepository
 
-router = APIRouter(prefix="/v1/jobs", tags=["jobs"])
+router = APIRouter(tags=["jobs"])  # prefix will be added in main.py
 _logger = logging.getLogger(__name__)
 
 

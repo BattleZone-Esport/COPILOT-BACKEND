@@ -76,5 +76,5 @@ class GitHubClient:
 
 
 async def get_github_client() -> GitHubClient:
-    http_client = await get_http_client()
+    http_client = get_http_client()  # This returns a client directly, not async
     return GitHubClient(http_client)

@@ -6,7 +6,7 @@ import logging
 from app.core.config import get_settings
 from app.db.mongo import ensure_indexes
 from app.queues.redis_queue import RedisQueue
-from app.services.orchestrator import Orchestrator
+from app.services.orchestrator import get_orchestrator
 from app.models.schemas import JobOptions
 
 _logger = logging.getLogger("worker")
@@ -20,7 +20,7 @@ async def main():
         return
 
     q = RedisQueue()
-    orch = Orchestrator()
+    orch = await get_orchestrator()  # Use the proper factory function
 
     _logger.info("Starting Redis worker...")
     while True:
@@ -52,16 +52,18 @@ async def main():
                 # Re-queue the job with a delay if needed, or just let another worker pick it up.
                 # For now, we'll just skip. A small delay might be good.
                 await asyncio.sleep(1)
-                await q.push(job_payload) # Re-queue
+                await q.enqueue_job(job_payload.get("job_id"), job_payload.get("prompt"), JobOptions(**job_payload.get("options")))  # Re-queue with correct method
                 continue
 
             try:
                 await orch.run(job_id=job_id, prompt=prompt, options=options)
             finally:
-                try:
-                    await lock.release()
-                except Exception:
-                    _logger.warning("Failed to release lock for job %s", job_id)
+                # Only release lock if we acquired it
+                if acquired:
+                    try:
+                        await lock.release()
+                    except Exception:
+                        _logger.warning("Failed to release lock for job %s", job_id)
         except Exception as e:
             _logger.exception("CRITICAL: Unhandled exception processing job %s.", job_id)
             await q.move_to_dlq(str(job_payload), f"unhandled_exception: {e}")
