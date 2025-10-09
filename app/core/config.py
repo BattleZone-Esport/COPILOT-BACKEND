@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     ENVIRONMENT: Literal["development", "production"] = "development"
 
     # CORS
-    APP_CORS_ORIGINS: List[str] = Field(default_factory=list)
+    APP_CORS_ORIGINS: List[str] = Field(default=["*"])
 
     # Auth
     AUTH_ENABLED: bool = True
