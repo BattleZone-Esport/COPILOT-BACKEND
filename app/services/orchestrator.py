@@ -15,7 +15,7 @@ from app.services.agents.coder import CoderAgent
 from app.services.agents.debugger import DebuggerAgent
 from app.services.agents.fixer import FixerAgent
 from app.services.agents.chatbot import ChatbotAgent
-from app.queues.redis_queue import RedisQueue
+from app.queues import get_queue
 from app.services.github_client import GitHubClient, get_github_client
 
 _logger = logging.getLogger(__name__)
@@ -36,13 +36,14 @@ class Orchestrator:
         self.fixer = FixerAgent()
         self.chatbot = ChatbotAgent()
 
-    async def create_job(self, prompt: str, options: JobOptions, user_id: Optional[str] = None) -> str:
+    async def create_job(self, prompt: str, options: JobOptions, user_id: Optional[str] = None, request_id: Optional[str] = None) -> str:
         job_id = str(uuid.uuid4())
         db = await get_db()
         repo = JobRepository(db)
         now = datetime.now(timezone.utc)
         job = JobCreate(
             job_id=job_id,
+            request_id=request_id,
             user_id=user_id,
             prompt=prompt,
             options=options,
@@ -52,12 +53,9 @@ class Orchestrator:
         )
         await repo.create_job(job)
         if options.mode == "queue":
-            q = RedisQueue()
-            await q.push({
-                "job_id": job_id,
-                "prompt": prompt,
-                "options": options.model_dump(),
-            })
+            queue = get_queue()
+            if queue:
+                await queue.enqueue_job(job_id, prompt, options)
         return job_id
 
     async def run(self, job_id: str, prompt: str, options: JobOptions) -> Dict[str, Any]:
@@ -218,7 +216,6 @@ class Orchestrator:
             _logger.exception(f"Failed to create GitHub PR for job {job_id}")
 
 
-async def get_orchestrator(
-    github_client: GitHubClient = await get_github_client(),
-) -> Orchestrator:
+async def get_orchestrator() -> Orchestrator:
+    github_client = await get_github_client()
     return Orchestrator(github_client)

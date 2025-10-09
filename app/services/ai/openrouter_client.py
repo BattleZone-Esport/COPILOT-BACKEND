@@ -59,7 +59,6 @@ class OpenRouterClient:
         return out.strip()
 
 
-async def get_openrouter_client(
-    http_client: httpx.AsyncClient = await get_http_client(),
-) -> OpenRouterClient:
+async def get_openrouter_client() -> OpenRouterClient:
+    http_client = await get_http_client()
     return OpenRouterClient(http_client)

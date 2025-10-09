@@ -7,6 +7,7 @@ from typing import Dict, Any, Optional
 from redis.asyncio import from_url, Redis
 
 from app.core.config import get_settings
+from app.models.schemas import JobOptions
 
 _logger = logging.getLogger(__name__)
 QUEUE_KEY = "ureshii.jobs"
@@ -40,7 +41,12 @@ class RedisQueue:
     def __init__(self) -> None:
         self.client: Redis = get_redis_client()
 
-    async def push(self, job: Dict[str, Any]) -> None:
+    async def enqueue_job(self, job_id: str, prompt: str, options: JobOptions) -> None:
+        job = {
+            "job_id": job_id,
+            "prompt": prompt,
+            "options": options.model_dump(),
+        }
         await self.client.lpush(QUEUE_KEY, json.dumps(job))
 
     async def pop(self, timeout: int = 5) -> Optional[Dict[str, Any]]:

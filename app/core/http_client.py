@@ -10,5 +10,5 @@ class AsyncHttpClient:
             cls._client = httpx.AsyncClient()
         return cls._client
 
-async def get_http_client() -> httpx.AsyncClient:
+def get_http_client() -> httpx.AsyncClient:
     return AsyncHttpClient.get_client()

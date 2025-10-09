@@ -17,6 +17,9 @@ class JobOptions(BaseModel):
     coder_model: Optional[str] = None
     debugger_model: Optional[str] = None
     fixer_model: Optional[str] = None
+    github_repo: Optional[str] = None
+    github_branch: Optional[str] = None
+    github_file_path: Optional[str] = None
 
 
 class PromptRequest(BaseModel):
@@ -79,3 +82,9 @@ class ArtifactRecord(BaseModel):
     type: Literal["code", "diff", "report", "metadata"]
     content: Any
     created_at: datetime
+
+
+class WebhookPayload(BaseModel):
+    job_id: str
+    prompt: str
+    options: JobOptions

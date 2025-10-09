@@ -75,7 +75,6 @@ class GitHubClient:
         return await self._request("POST", url, json=data)
 
 
-async def get_github_client(
-    http_client: httpx.AsyncClient = await get_http_client(),
-) -> GitHubClient:
+async def get_github_client() -> GitHubClient:
+    http_client = await get_http_client()
     return GitHubClient(http_client)

@@ -32,10 +32,19 @@ class Settings(BaseSettings):
     MONGO_URI: Optional[str] = None  # alias accepted
     MONGODB_DB: str = "ureshii_partner"
 
+    @property
+    def mongodb_uri_resolved(self) -> str:
+        return self.MONGODB_URI or self.MONGO_URI or ""
+
     # OpenAI
     OPENAI_API_KEY: Optional[str] = Field(default=None, repr=False)
     OPENAI_ORG_ID: Optional[str] = Field(default=None, repr=False)
     OPENAI_MODEL: str = "gpt-3.5-turbo"
+    
+    # OpenRouter
+    OPENROUTER_API_KEY: Optional[str] = Field(default=None, repr=False)
+    OPENROUTER_SITE_URL: Optional[str] = None
+    OPENROUTER_SITE_NAME: Optional[str] = None
 
     # LLM
     PROMPT_MAX_CHARS: int = 2000
@@ -45,15 +54,26 @@ class Settings(BaseSettings):
         "anthropic/claude-2",
         "google/gemini-pro",
     ]
+    DEFAULT_CODER_MODEL: str = "anthropic/claude-2"
+    DEFAULT_DEBUGGER_MODEL: str = "google/gemini-pro"
+    DEFAULT_FIXER_MODEL: str = "openai/gpt-4"
+    DEFAULT_CHATBOT_MODEL: str = "openai/gpt-3.5-turbo"
 
     # Queues
     QUEUE_BACKEND: Literal["redis", "gcp-pubsub", "qstash", "none"] = "none"
     REDIS_URL: Optional[AnyUrl] = None
+    QSTASH_URL: Optional[str] = None
     QSTASH_TOKEN: Optional[str] = Field(default=None, repr=False)
-    QSTASH_CALLBACK_URL: Optional[AnyUrl] = None
+    QSTASH_CURRENT_SIGNING_KEY: Optional[str] = Field(default=None, repr=False)
+    QSTASH_NEXT_SIGNING_KEY: Optional[str] = Field(default=None, repr=False)
+    QSTASH_DESTINATION_URL: Optional[AnyUrl] = None
+    QSTASH_VERIFY_SIGNATURE: bool = False
     GCP_PROJECT_ID: Optional[str] = None
     GCP_PUBSUB_TOPIC: Optional[str] = None
     JOB_LOCK_TIMEOUT: int = 300
+
+    # GitHub
+    GITHUB_TOKEN: Optional[str] = Field(default=None, repr=False)
 
     @field_validator("APP_CORS_ORIGINS", mode="before")
     @classmethod
