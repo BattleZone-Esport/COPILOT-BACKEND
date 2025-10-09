@@ -4,6 +4,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes.v1 import jobs, webhooks, auth
 from app.core.config import get_settings
@@ -33,6 +34,15 @@ def create_app() -> FastAPI:
         version=settings.PROJECT_VERSION,
         openapi_url=f"{settings.API_V1_STR}/openapi.json",
         lifespan=lifespan,
+    )
+
+    # Add CORS middleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[origin.strip() for origin in settings.APP_CORS_ORIGINS.split(",") if origin.strip()],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     # API V1 routes

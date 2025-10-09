@@ -5,7 +5,7 @@ import warnings
 from functools import lru_cache
 from typing import List, Literal, Optional
 
-from pydantic import AnyUrl, Field, field_validator, model_validator
+from pydantic import AnyUrl, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     ENVIRONMENT: Literal["development", "production"] = "development"
 
     # CORS
-    APP_CORS_ORIGINS: List[str] = Field(default=["*"])
+    APP_CORS_ORIGINS: str = "*"
 
     # Auth
     AUTH_ENABLED: bool = True
@@ -74,13 +74,6 @@ class Settings(BaseSettings):
 
     # GitHub
     GITHUB_TOKEN: Optional[str] = Field(default=None, repr=False)
-
-    @field_validator("APP_CORS_ORIGINS", mode="before")
-    @classmethod
-    def _parse_cors_origins(cls, v):
-        if isinstance(v, str):
-            return [origin.strip() for origin in v.split(",") if origin.strip()]
-        return v
 
     @model_validator(mode="after")
     def _check_settings(self) -> "Settings":
