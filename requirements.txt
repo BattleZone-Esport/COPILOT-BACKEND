@@ -23,6 +23,7 @@ itsdangerous==2.1.2
 
 # --- Tooling & Agents ---
 openai==1.3.7
+tenacity==8.2.3
 
 # --- Logging ---
 python-json-logger==2.0.7
